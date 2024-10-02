@@ -35,10 +35,10 @@
               <td><%= user.email %></td>
               <td><%= user.ethereum_address %></td>
               <td>
-                <% if (user.pin_code_slot) { %>
+                <% if (user.pin_code) { %>
                   <%= user.pin_code_slot %>
                 <% } else { %>
-                  No Pin Assigned
+                  No Pin Assigned, Slot <%= user.pin_code_slot %> Reserved
                 <% } %>
               </td>
               <td><%= user.nfc_key_address %></td>

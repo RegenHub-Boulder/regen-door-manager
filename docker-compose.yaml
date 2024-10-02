@@ -1,40 +1,31 @@
 services:
   app:
-    build: .
-    ports:
-      - "80:3000"
+    build: ./app
     environment:
+      - DB_HOST=localhost
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
       - DB_PASS=${DB_PASS}
-      - DB_HOST=db
       - DB_DIALECT=postgres
       - HA_URL=${HA_URL}
       - HA_TOKEN=${HA_TOKEN}
-      - BASIC_AUTH_USER=${BASIC_AUTH_USER}  # Add Basic Auth username
-      - BASIC_AUTH_PASS=${BASIC_AUTH_PASS}  # Add Basic Auth password
+      - BASIC_AUTH_USER=${BASIC_AUTH_USER}
+      - BASIC_AUTH_PASS=${BASIC_AUTH_PASS}
     depends_on:
       - db
-    networks:
-      - regen_network
+    network_mode: "host"
     restart: always
 
   db:
-    image: postgres:14
+    image: postgres:latest
     environment:
-      POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASS}
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${DB_NAME}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - regen_network
+      - pgdata:/var/lib/postgresql/data
     restart: always
+    network_mode: "host"
 
 volumes:
-  postgres_data:
-
-networks:
-  pincode_network:
+  pgdata:

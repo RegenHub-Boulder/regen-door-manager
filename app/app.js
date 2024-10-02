@@ -7,7 +7,7 @@ const User = require('./models/User');
 const { setUserCode, clearUserCode } = require('./helpers/homeAssistant');
 
 const app = express();
-const PORT = 3000;
+const PORT = 80;
 
 // Serve static files from the "public" directory
 app.use(express.static(path.join(__dirname, 'public')));
@@ -137,7 +137,6 @@ app.post('/remove-pin', async (req, res) => {
 
       // Clear the pin code and slot, but keep the user
       user.pin_code = null;
-      user.pin_code_slot = null;
       await user.save();
   
       res.redirect('/admin');

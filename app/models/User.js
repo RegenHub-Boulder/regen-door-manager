@@ -17,7 +17,6 @@ const User = sequelize.define('User', {
   },
   pin_code_slot: {
     type: DataTypes.INTEGER,
-    allowNull: true,
     validate: {
       isLessThan250(value) {
         if (value >= 250) {
@@ -70,6 +69,10 @@ const User = sequelize.define('User', {
         }
       }
     }
+  },
+  disabled: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false  // By default, users are enabled
   }
 }, {
   timestamps: true
