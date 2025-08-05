@@ -2,7 +2,7 @@ services:
   app:
     build: ./app
     environment:
-      - DB_HOST=localhost
+      - DB_HOST=${DB_HOST:-db}
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
       - DB_PASS=${DB_PASS}
@@ -11,21 +11,18 @@ services:
       - HA_TOKEN=${HA_TOKEN}
       - BASIC_AUTH_USER=${BASIC_AUTH_USER}
       - BASIC_AUTH_PASS=${BASIC_AUTH_PASS}
-    depends_on:
-      - db
-    network_mode: "host"
     restart: always
 
-  db:
-    image: postgres:latest
-    environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASS}
-      POSTGRES_DB: ${DB_NAME}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    restart: always
-    network_mode: "host"
+  # Commented out for Coolify - use Coolify's PostgreSQL service instead
+  # db:
+  #   image: postgres:latest
+  #   environment:
+  #     POSTGRES_USER: ${DB_USER}
+  #     POSTGRES_PASSWORD: ${DB_PASS}
+  #     POSTGRES_DB: ${DB_NAME}
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #   restart: always
 
-volumes:
-  pgdata:
+# volumes:
+#   pgdata:
