@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Edit User</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <!-- Centered logo -->
+  <div class="logo-container">
+    <img src="/images/regenhub_logo.png" alt="Logo">
+  </div>
+
+  <!-- Page content wrapped in a container with margins -->
+  <div class="content-container">
+    <h1>Edit User</h1>
+
+    <div class="form-container">
+      <form action="/edit" method="POST" onsubmit="showSpinner()">
+        <input type="hidden" name="id" value="<%= user.id %>">
+
+        <div class="form-group">
+          <label for="name">Name:</label>
+          <input type="text" id="name" name="name" value="<%= user.name %>" required>
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email:</label>
+          <input type="email" id="email" name="email" value="<%= user.email %>" placeholder="Enter Email">
+        </div>
+      
+        <div class="form-group">
+          <label for="ethereum_address">User Ethereum Address:</label>
+          <input type="text" id="ethereum_address" name="ethereum_address" value="<%= user.ethereum_address %>" ="0x...">
+        </div>
+
+        <div class="form-group">
+          <label for="pin_code_slot">Pin Code Slot:</label>
+          <input type="number" id="pin_code_slot" name="pin_code_slot" value="<%= user.pin_code_slot %>" required>
+        </div>
+
+        <div class="form-group">
+          <label for="pin_code">Pin Code:</label>
+          <div class="input-group">
+            <input type="password" id="pin_code" name="pin_code" value="<%= user.pin_code %>" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="nfc_key_address">NFC Key Address:</label>
+          <div class="input-group">
+            <input type="text" id="nfc_key_address" name="nfc_key_address" value="<%= user.nfc_key_address %>" readonly class="readonly-field">
+            <button type="button" class="btn btn-get-nfc" onclick="fetchNfcKeyAddress()">Get NFC Key Address</button>
+          </div>
+        </div>
+        
+        <div id="statusText" class="status-text"></div>
+        <div class="qr-container">
+          <img id="qr" src="" alt="QR Code" style="display:none;">
+        </div>        
+
+        <button type="submit" class="btn btn-submit">Submit</button>
+        <div class="spinner" id="spinner"></div>
+
+        <div id="error-messages" style="color: red;">
+          <% if (typeof errorMessage !== 'undefined') { %>
+            <p><%= errorMessage %></p>
+          <% } %>
+        </div>
+      </form>
+
+      <a href="/admin" class="back-link">Back to Admin</a>
+    </div>
+  </div>
+
+  <script src="https://github.com/arx-research/libhalo/releases/download/libhalo-v1.8.5/libhalo.js"></script> 
+  <script src="/scripts/common.js"></script>
+  <script>
+    document.querySelector('form').addEventListener('submit', function(event) {
+      const pinCodeSlot = document.getElementById('pin_code_slot').value;
+      const pinCode = document.getElementById('pin_code').value;
+      const ethereumAddress = document.getElementById('ethereum_address').value;
+  
+      if (pinCodeSlot >= 250) {
+        event.preventDefault();
+        alert('Pin Code Slot must be less than 250.');
+      }
+  
+      const pinCodePattern = /^\d{4,10}$/;
+      if (pinCode && !pinCodePattern.test(pinCode)) {
+        event.preventDefault();
+        alert('Pin Code must be a number between 4 and 10 digits.');
+      }
+  
+      const ethAddressPattern = /^0x[a-fA-F0-9]{40}$/;
+      if (ethereumAddress && !ethAddressPattern.test(ethereumAddress)) {
+        event.preventDefault();
+        alert('Invalid Ethereum Address.');
+      }
+    });
+  </script>  
+</body>
+</html>

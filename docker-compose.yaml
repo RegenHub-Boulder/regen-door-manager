@@ -1,0 +1,31 @@
+services:
+  app:
+    build: ./app
+    environment:
+      - DB_HOST=localhost
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - DB_DIALECT=postgres
+      - HA_URL=${HA_URL}
+      - HA_TOKEN=${HA_TOKEN}
+      - BASIC_AUTH_USER=${BASIC_AUTH_USER}
+      - BASIC_AUTH_PASS=${BASIC_AUTH_PASS}
+    depends_on:
+      - db
+    network_mode: "host"
+    restart: always
+
+  db:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+    network_mode: "host"
+
+volumes:
+  pgdata:
