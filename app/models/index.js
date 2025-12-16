@@ -220,8 +220,25 @@ DayCode.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
 // Sync all models
 const syncDatabase = async () => {
-  await sequelize.sync({ alter: true });
-  console.log('Database synchronized');
+  try {
+    // Test connection first
+    await sequelize.authenticate();
+    console.log('Database connection established.');
+
+    // Sync with alter - adds new columns/tables, modifies existing
+    await sequelize.sync({ alter: true });
+    console.log('Database synchronized successfully.');
+  } catch (error) {
+    console.error('Database sync failed:', error.message);
+
+    // If it's an ENUM error, provide helpful message
+    if (error.message.includes('enum') || error.message.includes('type')) {
+      console.error('You may need to manually create the ENUM type:');
+      console.error("CREATE TYPE \"enum_Users_member_type\" AS ENUM ('full', 'daypass');");
+    }
+
+    throw error;
+  }
 };
 
 module.exports = {
