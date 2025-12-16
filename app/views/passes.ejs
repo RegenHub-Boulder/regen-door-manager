@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Day Passes - <%= user.name %></title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="logo-container">
+    <img src="/images/regenhub_logo.png" alt="Logo">
+  </div>
+
+  <div class="content-container">
+    <h1>Day Passes for <%= user.name %></h1>
+    <p>Telegram: <%= user.telegram_username || 'Not set' %></p>
+
+    <h2>Active Day Codes</h2>
+    <% if (user.dayCodes && user.dayCodes.length > 0) { %>
+      <div class="table-container">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Slot</th>
+              <th>Issued</th>
+              <th>Expires</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% user.dayCodes.forEach(function(code) { %>
+              <tr>
+                <td><strong><%= code.code %></strong></td>
+                <td><%= code.pin_slot %></td>
+                <td><%= new Date(code.issued_at).toLocaleString() %></td>
+                <td><%= new Date(code.expires_at).toLocaleString() %></td>
+                <td>
+                  <form action="/passes/revoke-code" method="POST" style="display: inline;">
+                    <input type="hidden" name="code_id" value="<%= code.id %>">
+                    <input type="hidden" name="user_id" value="<%= user.id %>">
+                    <button type="submit" class="btn btn-small btn-delete-user" onclick="return confirm('Revoke this code?')">Revoke</button>
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %>
+      <p>No active day codes.</p>
+    <% } %>
+
+    <h2>Day Passes</h2>
+    <% if (user.dayPasses && user.dayPasses.length > 0) { %>
+      <div class="table-container">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Allowed Uses</th>
+              <th>Used</th>
+              <th>Remaining</th>
+              <th>Expires</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% user.dayPasses.forEach(function(pass) { %>
+              <tr>
+                <td><%= pass.id %></td>
+                <td><%= pass.allowed_uses %></td>
+                <td><%= pass.used_count %></td>
+                <td><%= pass.allowed_uses - pass.used_count %></td>
+                <td><%= pass.expires_at ? new Date(pass.expires_at).toLocaleDateString() : 'Never' %></td>
+                <td>
+                  <form action="/passes/delete" method="POST" style="display: inline;">
+                    <input type="hidden" name="pass_id" value="<%= pass.id %>">
+                    <input type="hidden" name="user_id" value="<%= user.id %>">
+                    <button type="submit" class="btn btn-small btn-delete-user" onclick="return confirm('Delete this pass? Any active codes will be revoked.')">Delete</button>
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %>
+      <p>No day passes found.</p>
+    <% } %>
+
+    <h2>Add New Passes</h2>
+    <div class="form-container">
+      <form action="/passes/add" method="POST">
+        <input type="hidden" name="user_id" value="<%= user.id %>">
+
+        <div class="form-group">
+          <label for="allowed_uses">Number of Passes:</label>
+          <input type="number" id="allowed_uses" name="allowed_uses" value="10" min="1" required>
+        </div>
+
+        <div class="form-group">
+          <label for="expires_at">Expiration Date (optional):</label>
+          <input type="date" id="expires_at" name="expires_at">
+        </div>
+
+        <button type="submit" class="btn btn-submit">Add Passes</button>
+      </form>
+    </div>
+
+    <a href="/admin" class="back-link">Back to Admin</a>
+  </div>
+
+  <style>
+    .btn-small {
+      padding: 4px 8px;
+      font-size: 0.85em;
+    }
+  </style>
+</body>
+</html>

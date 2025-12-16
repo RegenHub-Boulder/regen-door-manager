@@ -25,34 +25,50 @@
         </div>
 
         <div class="form-group">
-          <label for="email">Email:</label>
-          <input type="email" id="email" name="email" value="<%= user.email %>" placeholder="Enter Email">
+          <label for="member_type">Member Type:</label>
+          <select id="member_type" name="member_type" onchange="toggleMemberTypeFields()">
+            <option value="full" <%= user.member_type === 'full' ? 'selected' : '' %>>Full Member</option>
+            <option value="daypass" <%= user.member_type === 'daypass' ? 'selected' : '' %>>Day Pass Member</option>
+          </select>
         </div>
-      
+
+        <div class="form-group">
+          <label for="telegram_username">Telegram Username:</label>
+          <input type="text" id="telegram_username" name="telegram_username" value="<%= user.telegram_username || '' %>" placeholder="@username">
+          <small>Required for Telegram bot access</small>
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email:</label>
+          <input type="email" id="email" name="email" value="<%= user.email || '' %>" placeholder="Enter Email">
+        </div>
+
         <div class="form-group">
           <label for="ethereum_address">User Ethereum Address:</label>
-          <input type="text" id="ethereum_address" name="ethereum_address" value="<%= user.ethereum_address %>" ="0x...">
+          <input type="text" id="ethereum_address" name="ethereum_address" value="<%= user.ethereum_address || '' %>" placeholder="0x...">
         </div>
 
-        <div class="form-group">
-          <label for="pin_code_slot">Pin Code Slot:</label>
-          <input type="number" id="pin_code_slot" name="pin_code_slot" value="<%= user.pin_code_slot %>" required>
-        </div>
-
-        <div class="form-group">
-          <label for="pin_code">Pin Code:</label>
-          <div class="input-group">
-            <input type="password" id="pin_code" name="pin_code" value="<%= user.pin_code %>" required>
-            <button type="button" class="btn" onclick="generateRandomPin()">Generate Random PIN</button>
-            <button type="button" class="btn" onclick="togglePinVisibility()">Show PIN</button>
+        <div id="full-member-fields" style="<%= user.member_type === 'daypass' ? 'display:none' : '' %>">
+          <div class="form-group">
+            <label for="pin_code_slot">Pin Code Slot:</label>
+            <input type="number" id="pin_code_slot" name="pin_code_slot" value="<%= user.pin_code_slot %>">
           </div>
-        </div>
 
-        <div class="form-group">
-          <label for="nfc_key_address">NFC Key Address:</label>
-          <div class="input-group">
-            <input type="text" id="nfc_key_address" name="nfc_key_address" value="<%= user.nfc_key_address %>" readonly class="readonly-field">
-            <button type="button" class="btn btn-get-nfc" onclick="fetchNfcKeyAddress()">Get NFC Key Address</button>
+          <div class="form-group">
+            <label for="pin_code">Pin Code:</label>
+            <div class="input-group">
+              <input type="password" id="pin_code" name="pin_code" value="<%= user.pin_code || '' %>">
+              <button type="button" class="btn" onclick="generateRandomPin()">Generate Random PIN</button>
+              <button type="button" class="btn" onclick="togglePinVisibility()">Show PIN</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="nfc_key_address">NFC Key Address:</label>
+            <div class="input-group">
+              <input type="text" id="nfc_key_address" name="nfc_key_address" value="<%= user.nfc_key_address || '' %>" readonly class="readonly-field">
+              <button type="button" class="btn btn-get-nfc" onclick="fetchNfcKeyAddress()">Get NFC Key Address</button>
+            </div>
           </div>
         </div>
         
@@ -75,31 +91,56 @@
     </div>
   </div>
 
-  <script src="https://github.com/arx-research/libhalo/releases/download/libhalo-v1.8.5/libhalo.js"></script> 
+  <script src="https://github.com/arx-research/libhalo/releases/download/libhalo-v1.8.5/libhalo.js"></script>
   <script src="/scripts/common.js"></script>
   <script>
+    function toggleMemberTypeFields() {
+      const memberType = document.getElementById('member_type').value;
+      const fullFields = document.getElementById('full-member-fields');
+
+      if (memberType === 'full') {
+        fullFields.style.display = 'block';
+      } else {
+        fullFields.style.display = 'none';
+      }
+    }
+
     document.querySelector('form').addEventListener('submit', function(event) {
-      const pinCodeSlot = document.getElementById('pin_code_slot').value;
-      const pinCode = document.getElementById('pin_code').value;
+      const memberType = document.getElementById('member_type').value;
+      const telegramUsername = document.getElementById('telegram_username').value;
       const ethereumAddress = document.getElementById('ethereum_address').value;
-  
-      if (pinCodeSlot >= 250) {
+
+      // Validate telegram username format if provided
+      if (telegramUsername && !/^@[a-zA-Z0-9_]{5,32}$/.test(telegramUsername)) {
         event.preventDefault();
-        alert('Pin Code Slot must be less than 250.');
+        alert('Telegram username must start with @ and be 5-32 characters.');
+        return;
       }
-  
-      const pinCodePattern = /^\d{4,10}$/;
-      if (pinCode && !pinCodePattern.test(pinCode)) {
-        event.preventDefault();
-        alert('Pin Code must be a number between 4 and 10 digits.');
+
+      if (memberType === 'full') {
+        const pinCodeSlot = document.getElementById('pin_code_slot').value;
+        const pinCode = document.getElementById('pin_code').value;
+
+        if (pinCodeSlot >= 250) {
+          event.preventDefault();
+          alert('Pin Code Slot must be less than 250.');
+          return;
+        }
+
+        const pinCodePattern = /^\d{4,10}$/;
+        if (pinCode && !pinCodePattern.test(pinCode)) {
+          event.preventDefault();
+          alert('Pin Code must be a number between 4 and 10 digits.');
+          return;
+        }
       }
-  
+
       const ethAddressPattern = /^0x[a-fA-F0-9]{40}$/;
       if (ethereumAddress && !ethAddressPattern.test(ethereumAddress)) {
         event.preventDefault();
         alert('Invalid Ethereum Address.');
       }
     });
-  </script>  
+  </script>
 </body>
 </html>

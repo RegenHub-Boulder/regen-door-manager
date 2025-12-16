@@ -1,7 +1,7 @@
 {
   "name": "regen_door_manager",
-  "version": "1.0.0",
-  "description": "",
+  "version": "2.0.0",
+  "description": "RegenHub Door Manager with Telegram bot integration",
   "main": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -17,6 +17,8 @@
     "body-parser": "^1.20.3",
     "ejs": "^3.1.10",
     "express": "^4.21.0",
+    "node-cron": "^3.0.3",
+    "node-telegram-bot-api": "^0.66.0",
     "pg": "^8.13.0",
     "sequelize": "^6.37.3"
   }

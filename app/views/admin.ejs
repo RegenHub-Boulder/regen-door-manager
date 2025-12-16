@@ -21,10 +21,11 @@
         <thead>
           <tr>
             <th>Name</th>
+            <th>Type</th>
+            <th>Telegram</th>
             <th>Email</th>
-            <th>Ethereum Address</th>
             <th>Pin Code Slot</th>
-            <th>NFC Key Address</th>
+            <th>Day Passes</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -32,29 +33,48 @@
           <% users.forEach(function(user) { %>
             <tr>
               <td><%= user.name %></td>
-              <td><%= user.email %></td>
-              <td><%= user.ethereum_address %></td>
               <td>
-                <% if (user.pin_code) { %>
-                  <%= user.pin_code_slot %>
+                <span class="badge <%= user.member_type === 'full' ? 'badge-full' : 'badge-daypass' %>">
+                  <%= user.member_type === 'full' ? 'Full' : 'Day Pass' %>
+                </span>
+              </td>
+              <td><%= user.telegram_username || '-' %></td>
+              <td><%= user.email || '-' %></td>
+              <td>
+                <% if (user.member_type === 'full') { %>
+                  <% if (user.pin_code) { %>
+                    Slot <%= user.pin_code_slot %>
+                  <% } else { %>
+                    No Pin (Slot <%= user.pin_code_slot %>)
+                  <% } %>
                 <% } else { %>
-                  No Pin Assigned, Slot <%= user.pin_code_slot %> Reserved
+                  N/A
                 <% } %>
               </td>
-              <td><%= user.nfc_key_address %></td>
+              <td>
+                <% if (user.member_type === 'daypass' && user.dayPasses) { %>
+                  <% const totalPasses = user.dayPasses.reduce((sum, p) => sum + p.allowed_uses, 0); %>
+                  <% const usedPasses = user.dayPasses.reduce((sum, p) => sum + p.used_count, 0); %>
+                  <%= usedPasses %>/<%= totalPasses %> used
+                <% } else { %>
+                  -
+                <% } %>
+              </td>
               <td>
                 <div class="action-buttons">
-                  <form action="/remove-pin" method="POST" style="display: inline;">
-                    <input type="hidden" name="id" value="<%= user.id %>">
-                    <button type="submit" class="btn" onclick="showSpinner()">Remove Pin</button>
-                  </form>
-
-                  <button class="btn" onclick="sendPinToDoor('<%= user.pin_code_slot %>')">Send Pin to Door</button>
-                  <button class="btn" onclick="editUser('<%= user.id %>')">Edit User</button>
-
+                  <% if (user.member_type === 'full') { %>
+                    <form action="/remove-pin" method="POST" style="display: inline;">
+                      <input type="hidden" name="id" value="<%= user.id %>">
+                      <button type="submit" class="btn btn-small" onclick="showSpinner()">Remove Pin</button>
+                    </form>
+                    <button class="btn btn-small" onclick="sendPinToDoor('<%= user.pin_code_slot %>')">Send Pin</button>
+                  <% } else { %>
+                    <button class="btn btn-small" onclick="managePasses('<%= user.id %>')">Manage Passes</button>
+                  <% } %>
+                  <button class="btn btn-small" onclick="editUser('<%= user.id %>')">Edit</button>
                   <form action="/remove" method="POST" style="display: inline;" onsubmit="return confirmDelete()">
                     <input type="hidden" name="id" value="<%= user.id %>">
-                    <button type="submit" class="btn btn-delete-user" onclick="showSpinner()">Delete User</button>
+                    <button type="submit" class="btn btn-small btn-delete-user" onclick="showSpinner()">Delete</button>
                   </form>
                 </div>
               </td>
@@ -105,6 +125,32 @@
       showSpinner();
       window.location.href = `/edit?id=${id}`;
     }
+
+    function managePasses(userId) {
+      showSpinner();
+      window.location.href = `/passes?userId=${userId}`;
+    }
   </script>
+
+  <style>
+    .badge {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.85em;
+      font-weight: bold;
+    }
+    .badge-full {
+      background-color: #4CAF50;
+      color: white;
+    }
+    .badge-daypass {
+      background-color: #2196F3;
+      color: white;
+    }
+    .btn-small {
+      padding: 4px 8px;
+      font-size: 0.85em;
+    }
+  </style>
 </body>
 </html>
