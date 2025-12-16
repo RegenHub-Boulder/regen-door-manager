@@ -14,6 +14,20 @@ let bot = null;
 const pendingCodeChanges = new Map();
 
 /**
+ * React to a message with eyes emoji to show we saw it
+ */
+async function reactWithEyes(msg) {
+  try {
+    await bot.setMessageReaction(msg.chat.id, msg.message_id, {
+      reaction: [{ type: 'emoji', emoji: '👀' }]
+    });
+  } catch (error) {
+    // Silently fail - reactions may not be supported in all chats
+    console.log('[Telegram] Could not set reaction:', error.message);
+  }
+}
+
+/**
  * Initialize and start the Telegram bot
  */
 function startBot() {
@@ -27,10 +41,10 @@ function startBot() {
   bot = new TelegramBot(token, { polling: true });
   console.log('[Telegram] Bot started and polling for messages...');
 
-  // Register command handlers
+  // Register command handlers with regex to capture arguments
   bot.onText(/\/start/, handleStart);
   bot.onText(/\/mycode/, handleMyCode);
-  bot.onText(/\/newcode/, handleNewCode);
+  bot.onText(/\/newcode(?:\s+(.+))?/, handleNewCode);
   bot.onText(/\/daypass/, handleDayPass);
   bot.onText(/\/help/, handleHelp);
 
@@ -64,6 +78,8 @@ async function findUserByTelegram(username) {
 async function handleStart(msg) {
   const chatId = msg.chat.id;
   const username = msg.from?.username;
+
+  await reactWithEyes(msg);
 
   const user = await findUserByTelegram(username);
 
@@ -101,6 +117,9 @@ async function handleStart(msg) {
 async function handleHelp(msg) {
   const chatId = msg.chat.id;
   const username = msg.from?.username;
+
+  await reactWithEyes(msg);
+
   const user = await findUserByTelegram(username);
 
   if (!user) {
@@ -120,7 +139,9 @@ async function handleHelp(msg) {
     message += `- The ability to change your code whenever you want\n\n`;
     message += `Commands:\n`;
     message += `/mycode - View your current door code\n`;
-    message += `/newcode - Set a new door code (pick your own or auto-generate)\n`;
+    message += `/newcode - Set a new door code interactively\n`;
+    message += `/newcode 1234 - Set code directly (4-6 digits)\n`;
+    message += `/newcode random - Generate a random code\n`;
   } else {
     message += `As a Day Pass Member, you have:\n`;
     message += `- A set number of day passes\n`;
@@ -138,6 +159,9 @@ async function handleHelp(msg) {
 async function handleMyCode(msg) {
   const chatId = msg.chat.id;
   const username = msg.from?.username;
+
+  await reactWithEyes(msg);
+
   const user = await findUserByTelegram(username);
 
   if (!user) {
@@ -168,10 +192,16 @@ async function handleMyCode(msg) {
 
 /**
  * /newcode - Full members set a new code
+ * Supports: /newcode, /newcode 1234, /newcode random
  */
-async function handleNewCode(msg) {
+async function handleNewCode(msg, match) {
   const chatId = msg.chat.id;
   const username = msg.from?.username;
+  const codeArg = match?.[1]?.trim(); // Captured argument from regex
+
+  // React with eyes to show we saw the message
+  await reactWithEyes(msg);
+
   const user = await findUserByTelegram(username);
 
   if (!user) {
@@ -193,7 +223,43 @@ async function handleNewCode(msg) {
     );
   }
 
-  // Store that this user is waiting to input a code
+  // If a code was provided as argument, process it directly
+  if (codeArg) {
+    let newCode;
+
+    if (codeArg.toLowerCase() === 'random') {
+      newCode = String(Math.floor(100000 + Math.random() * 900000));
+    } else if (/^\d{4,6}$/.test(codeArg)) {
+      newCode = codeArg;
+    } else {
+      return bot.sendMessage(chatId,
+        `Invalid code format.\n\n` +
+        `Use: /newcode 1234 (4-6 digits)\n` +
+        `Or: /newcode random`
+      );
+    }
+
+    try {
+      await setUserCode(user.pin_code_slot, newCode);
+      user.pin_code = newCode;
+      await user.save();
+
+      return bot.sendMessage(chatId,
+        `Your door code has been updated!\n\n` +
+        `🔑 *${newCode}*\n\n` +
+        `This code is now active on the door.`,
+        { parse_mode: 'Markdown' }
+      );
+    } catch (error) {
+      console.error('[Telegram] Failed to update code:', error);
+      return bot.sendMessage(chatId,
+        `Sorry, there was an error updating your code.\n` +
+        `Please try again or contact an admin.`
+      );
+    }
+  }
+
+  // No argument provided - enter interactive mode
   pendingCodeChanges.set(chatId, {
     userId: user.id,
     timestamp: Date.now()
@@ -201,9 +267,8 @@ async function handleNewCode(msg) {
 
   return bot.sendMessage(chatId,
     `Let's set your new door code!\n\n` +
-    `Please send me:\n` +
-    `- A 4-6 digit code of your choice, OR\n` +
-    `- Type "random" to auto-generate one\n\n` +
+    `Send me a 4-6 digit code, or type "random"\n\n` +
+    `Tip: You can also use /newcode 1234 directly.\n\n` +
     `Type "cancel" to abort.`
   );
 }
@@ -214,6 +279,9 @@ async function handleNewCode(msg) {
 async function handleDayPass(msg) {
   const chatId = msg.chat.id;
   const username = msg.from?.username;
+
+  await reactWithEyes(msg);
+
   const user = await findUserByTelegram(username);
 
   if (!user) {
@@ -349,6 +417,9 @@ async function handleMessage(msg) {
   // Check if this user is in the middle of setting a new code
   const pending = pendingCodeChanges.get(chatId);
   if (!pending) return;
+
+  // React with eyes to show we saw the message
+  await reactWithEyes(msg);
 
   // Clean up old pending requests (older than 5 minutes)
   if (Date.now() - pending.timestamp > 5 * 60 * 1000) {
