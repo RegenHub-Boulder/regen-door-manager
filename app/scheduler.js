@@ -93,6 +93,11 @@ function startScheduler() {
         await expireOldCodes();
       }
     } catch (error) {
+      // If table doesn't exist, just skip silently (will be created on next deploy)
+      if (error.message && error.message.includes('does not exist')) {
+        // Skip - table not created yet
+        return;
+      }
       console.error('[Scheduler] Error during cleanup check:', error.message);
     }
   }, {

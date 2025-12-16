@@ -225,11 +225,32 @@ const syncDatabase = async () => {
     await sequelize.authenticate();
     console.log('Database connection established.');
 
+    // Log which models we're about to sync
+    console.log('Models to sync: User, DayPass, DayCode');
+
     // Sync with alter - adds new columns/tables, modifies existing
     await sequelize.sync({ alter: true });
     console.log('Database synchronized successfully.');
+
+    // Verify tables exist by querying them
+    const [tables] = await sequelize.query(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+    );
+    console.log('Tables in database:', tables.map(t => t.table_name).join(', '));
+
+    // Verify our specific tables
+    const tableNames = tables.map(t => t.table_name);
+    const requiredTables = ['Users', 'DayPasses', 'DayCodes'];
+    for (const table of requiredTables) {
+      if (tableNames.includes(table)) {
+        console.log(`✓ Table ${table} exists`);
+      } else {
+        console.error(`✗ Table ${table} MISSING!`);
+      }
+    }
   } catch (error) {
     console.error('Database sync failed:', error.message);
+    console.error('Full error:', error);
 
     // If it's an ENUM error, provide helpful message
     if (error.message.includes('enum') || error.message.includes('type')) {

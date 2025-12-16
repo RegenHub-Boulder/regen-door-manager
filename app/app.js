@@ -62,16 +62,33 @@ startServer();
 
 // Admin page: List users and suggest next slot
 app.get('/admin', async (req, res) => {
-  const users = await User.findAll({
-    attributes: ['id', 'name', 'email', 'ethereum_address', 'pin_code_slot', 'pin_code', 'nfc_key_address', 'telegram_username', 'member_type'],
-    include: [{
-      model: DayPass,
-      as: 'dayPasses',
-      required: false
-    }]
-  });
-  const nextSlot = await findNextAvailableSlot();
-  res.render('admin', { users, nextSlot });
+  try {
+    let users;
+    try {
+      // Try to include dayPasses
+      users = await User.findAll({
+        attributes: ['id', 'name', 'email', 'ethereum_address', 'pin_code_slot', 'pin_code', 'nfc_key_address', 'telegram_username', 'member_type'],
+        include: [{
+          model: DayPass,
+          as: 'dayPasses',
+          required: false
+        }]
+      });
+    } catch (includeError) {
+      // If DayPasses table doesn't exist, just get users without it
+      console.log('[Admin] DayPasses table may not exist, loading users without passes');
+      users = await User.findAll({
+        attributes: ['id', 'name', 'email', 'ethereum_address', 'pin_code_slot', 'pin_code', 'nfc_key_address', 'telegram_username', 'member_type']
+      });
+      // Add empty dayPasses array to each user for template compatibility
+      users = users.map(u => ({ ...u.toJSON(), dayPasses: [] }));
+    }
+    const nextSlot = await findNextAvailableSlot();
+    res.render('admin', { users, nextSlot });
+  } catch (error) {
+    console.error('[Admin] Error loading admin page:', error.message);
+    res.status(500).send('Error loading admin page: ' + error.message);
+  }
 });
 
 // Add new user page (slot value passed in the query)
