@@ -1,35 +1,35 @@
 services:
   app:
     build: ./app
-    ports:
-      - "3000:80"
     environment:
-      - DB_HOST=${DB_HOST:-db}
-      - DB_NAME=${DB_NAME:-pincode_manager}
-      - DB_USER=${DB_USER:-pincode_user}
-      - DB_PASS=${DB_PASS:-devpass}
+      - DB_HOST=localhost
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
       - DB_DIALECT=postgres
-      - HA_URL=${HA_URL:-http://localhost:8123}
-      - HA_TOKEN=${HA_TOKEN:-}
-      - BASIC_AUTH_USER=${BASIC_AUTH_USER:-admin}
-      - BASIC_AUTH_PASS=${BASIC_AUTH_PASS:-admin}
+      - HA_URL=${HA_URL}
+      - HA_TOKEN=${HA_TOKEN}
+      - BASIC_AUTH_USER=${BASIC_AUTH_USER}
+      - BASIC_AUTH_PASS=${BASIC_AUTH_PASS}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - DAY_PASS_SLOT_MIN=${DAY_PASS_SLOT_MIN:-125}
       - DAY_PASS_SLOT_MAX=${DAY_PASS_SLOT_MAX:-249}
       - TIMEZONE=${TIMEZONE:-America/Denver}
     depends_on:
       - db
+    network_mode: "host"
     restart: always
 
   db:
-    image: postgres:15
+    image: postgres:latest
     environment:
-      POSTGRES_USER: ${DB_USER:-pincode_user}
-      POSTGRES_PASSWORD: ${DB_PASS:-devpass}
-      POSTGRES_DB: ${DB_NAME:-pincode_manager}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: always
+    network_mode: "host"
 
 volumes:
   pgdata:
