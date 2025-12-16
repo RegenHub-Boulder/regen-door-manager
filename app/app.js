@@ -35,10 +35,30 @@ const auth = (req, res, next) => {
 // Apply Basic Auth middleware to all routes
 app.use(auth);
 
-// Sync database
-(async () => {
-  await syncDatabase();
-})();
+// Startup function - sync DB before starting server
+async function startServer() {
+  try {
+    // Sync database first - wait for tables to be created
+    await syncDatabase();
+
+    // Then start the server
+    app.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+
+      // Start Telegram bot
+      startBot();
+
+      // Start scheduler for code expiration
+      startScheduler();
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+// Start the server
+startServer();
 
 // Admin page: List users and suggest next slot
 app.get('/admin', async (req, res) => {
@@ -527,16 +547,3 @@ app.delete('/api/day-codes/:id', async (req, res) => {
   }
 });
 
-// ============================================
-// Server startup
-// ============================================
-
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-
-  // Start Telegram bot
-  startBot();
-
-  // Start scheduler for code expiration
-  startScheduler();
-});
