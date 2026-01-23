@@ -8,7 +8,8 @@ const syncState = {
   startedAt: null,
   current: 0,
   total: 0,
-  message: ''
+  message: '',
+  lastFailedItems: [] // Track failed items for retry
 };
 
 // Delay helper for rate limiting
@@ -16,6 +17,29 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Rate limit delay between operations (ms)
 const RATE_LIMIT_DELAY = 500;
+
+// Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 2000; // 2 seconds between retries
+
+/**
+ * Execute an operation with automatic retries
+ */
+async function withRetry(operation, operationName) {
+  let lastError;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt < MAX_RETRIES) {
+        console.log(`[LockSync] ${operationName} failed (attempt ${attempt}/${MAX_RETRIES}), retrying in ${RETRY_DELAY}ms...`);
+        await delay(RETRY_DELAY);
+      }
+    }
+  }
+  throw lastError;
+}
 
 /**
  * Middleware to block lock-modifying routes during sync
@@ -74,7 +98,10 @@ async function pushAllCodes(onProgress) {
     });
 
     try {
-      await setUserCode(user.pin_code_slot, user.pin_code);
+      await withRetry(
+        () => setUserCode(user.pin_code_slot, user.pin_code),
+        `Push ${user.name} (slot ${user.pin_code_slot})`
+      );
       results.success++;
     } catch (error) {
       results.failed++;
@@ -100,7 +127,10 @@ async function pushAllCodes(onProgress) {
     });
 
     try {
-      await setUserCode(code.pin_slot, code.code);
+      await withRetry(
+        () => setUserCode(code.pin_slot, code.code),
+        `Push day code for ${userName} (slot ${code.pin_slot})`
+      );
       results.success++;
     } catch (error) {
       results.failed++;
@@ -135,7 +165,10 @@ async function clearAllSlots(onProgress) {
     });
 
     try {
-      await clearUserCode(slot);
+      await withRetry(
+        () => clearUserCode(slot),
+        `Clear slot ${slot}`
+      );
       results.success++;
     } catch (error) {
       results.failed++;
@@ -186,7 +219,10 @@ async function fullResync(onProgress) {
     });
 
     try {
-      await clearUserCode(slot);
+      await withRetry(
+        () => clearUserCode(slot),
+        `Clear slot ${slot}`
+      );
       results.clear.success++;
     } catch (error) {
       results.clear.failed++;
@@ -210,7 +246,10 @@ async function fullResync(onProgress) {
     });
 
     try {
-      await setUserCode(user.pin_code_slot, user.pin_code);
+      await withRetry(
+        () => setUserCode(user.pin_code_slot, user.pin_code),
+        `Push ${user.name} (slot ${user.pin_code_slot})`
+      );
       results.push.success++;
     } catch (error) {
       results.push.failed++;
@@ -242,7 +281,10 @@ async function fullResync(onProgress) {
     });
 
     try {
-      await setUserCode(code.pin_slot, code.code);
+      await withRetry(
+        () => setUserCode(code.pin_slot, code.code),
+        `Push day code for ${userName} (slot ${code.pin_slot})`
+      );
       results.push.success++;
     } catch (error) {
       results.push.failed++;
@@ -308,13 +350,16 @@ async function runSync(operation, onProgress, onComplete) {
         throw new Error(`Unknown operation: ${operation}`);
     }
 
+    // Store failed items for potential retry
+    syncState.lastFailedItems = results.errors || [];
+
     if (onComplete) onComplete(null, results);
     return results;
   } catch (error) {
     if (onComplete) onComplete(error, null);
     throw error;
   } finally {
-    // Release lock
+    // Release lock (but keep lastFailedItems)
     syncState.isRunning = false;
     syncState.operation = null;
     syncState.startedAt = null;
@@ -324,6 +369,103 @@ async function runSync(operation, onProgress, onComplete) {
   }
 }
 
+/**
+ * Retry only the previously failed items
+ */
+async function retryFailed(onProgress) {
+  const failedItems = syncState.lastFailedItems;
+
+  if (!failedItems || failedItems.length === 0) {
+    return { success: 0, failed: 0, errors: [], message: 'No failed items to retry' };
+  }
+
+  const results = { success: 0, failed: 0, errors: [] };
+  const total = failedItems.length;
+
+  onProgress({ current: 0, total, message: `Retrying ${total} failed items...` });
+
+  for (let i = 0; i < failedItems.length; i++) {
+    const item = failedItems[i];
+    const current = i + 1;
+
+    if (item.type === 'slot') {
+      // Clear slot retry
+      onProgress({
+        current,
+        total,
+        message: `Retrying clear slot ${item.slot}...`
+      });
+
+      try {
+        await withRetry(
+          () => clearUserCode(item.slot),
+          `Retry clear slot ${item.slot}`
+        );
+        results.success++;
+      } catch (error) {
+        results.failed++;
+        results.errors.push({
+          type: 'slot',
+          slot: item.slot,
+          error: error.message
+        });
+      }
+    } else if (item.type === 'user' || item.type === 'daycode') {
+      // Push code retry - need to fetch current data
+      onProgress({
+        current,
+        total,
+        message: `Retrying push ${item.name} (slot ${item.slot})...`
+      });
+
+      try {
+        // Fetch fresh data based on type
+        let code;
+        if (item.type === 'user') {
+          const user = await User.findOne({ where: { pin_code_slot: item.slot } });
+          if (user && user.pin_code) {
+            code = user.pin_code;
+          }
+        } else {
+          const dayCode = await DayCode.findOne({
+            where: { pin_slot: item.slot, is_active: true }
+          });
+          if (dayCode) {
+            code = dayCode.code;
+          }
+        }
+
+        if (code) {
+          await withRetry(
+            () => setUserCode(item.slot, code),
+            `Retry push ${item.name} (slot ${item.slot})`
+          );
+          results.success++;
+        } else {
+          results.failed++;
+          results.errors.push({
+            ...item,
+            error: 'Code no longer exists in database'
+          });
+        }
+      } catch (error) {
+        results.failed++;
+        results.errors.push({
+          ...item,
+          error: error.message
+        });
+      }
+    }
+
+    await delay(RATE_LIMIT_DELAY);
+  }
+
+  // Update lastFailedItems with any new failures
+  syncState.lastFailedItems = results.errors;
+
+  return results;
+}
+
 module.exports = {
   syncState,
   blockDuringSync,
@@ -331,5 +473,6 @@ module.exports = {
   pushAllCodes,
   clearAllSlots,
   fullResync,
-  runSync
+  runSync,
+  retryFailed
 };

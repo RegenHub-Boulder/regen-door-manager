@@ -40,13 +40,19 @@ const LockSync = (function() {
           <div class="sync-results-summary" id="sync-results-summary"></div>
           <div class="sync-results-errors" id="sync-results-errors"></div>
         </div>
-        <button class="btn btn-submit sync-close-btn" id="sync-close-btn" style="display: none;">Close</button>
+        <div class="sync-buttons-row">
+          <button class="btn btn-sync btn-sync-push" id="sync-retry-btn" style="display: none;">Retry Failed</button>
+          <button class="btn btn-submit sync-close-btn" id="sync-close-btn" style="display: none;">Close</button>
+        </div>
       </div>
     `;
     document.body.appendChild(overlay);
 
     // Close button handler
     document.getElementById('sync-close-btn').addEventListener('click', hideOverlay);
+
+    // Retry button handler
+    document.getElementById('sync-retry-btn').addEventListener('click', retryFailed);
 
     // Warn before navigating away during sync
     window.addEventListener('beforeunload', function(e) {
@@ -69,6 +75,7 @@ const LockSync = (function() {
     document.getElementById('sync-progress-text').textContent = '0 / 0';
     document.getElementById('sync-results').style.display = 'none';
     document.getElementById('sync-close-btn').style.display = 'none';
+    document.getElementById('sync-retry-btn').style.display = 'none';
     overlay.style.display = 'flex';
   }
 
@@ -134,7 +141,98 @@ const LockSync = (function() {
     }
 
     resultsDiv.style.display = 'block';
-    document.getElementById('sync-close-btn').style.display = 'block';
+    document.getElementById('sync-close-btn').style.display = 'inline-block';
+
+    // Show retry button if there are failures
+    if (results.failed > 0) {
+      document.getElementById('sync-retry-btn').style.display = 'inline-block';
+    } else {
+      document.getElementById('sync-retry-btn').style.display = 'none';
+    }
+  }
+
+  /**
+   * Retry failed items
+   */
+  function retryFailed() {
+    // Hide buttons, reset display
+    document.getElementById('sync-close-btn').style.display = 'none';
+    document.getElementById('sync-retry-btn').style.display = 'none';
+    document.getElementById('sync-results').style.display = 'none';
+    document.getElementById('sync-title').textContent = 'Retrying Failed Items';
+    document.getElementById('sync-status').textContent = 'Starting retry...';
+    document.getElementById('sync-progress-bar').style.width = '0%';
+    document.getElementById('sync-progress-text').textContent = '0 / 0';
+
+    isSyncing = true;
+
+    fetch('/api/sync/retry', {
+      method: 'POST',
+      headers: {
+        'Accept': 'text/event-stream'
+      }
+    }).then(response => {
+      if (!response.ok) {
+        return response.json().then(err => {
+          throw new Error(err.error || 'Retry failed');
+        });
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      function processStream() {
+        return reader.read().then(({ done, value }) => {
+          if (done) {
+            isSyncing = false;
+            return;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+
+          const lines = buffer.split('\n');
+          buffer = '';
+
+          let eventType = null;
+          let eventData = null;
+
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+
+            if (line.startsWith('event: ')) {
+              eventType = line.substring(7);
+            } else if (line.startsWith('data: ')) {
+              eventData = line.substring(6);
+
+              if (eventType && eventData) {
+                try {
+                  const data = JSON.parse(eventData);
+                  handleEvent(eventType, data);
+                } catch (e) {
+                  console.error('Error parsing SSE data:', e);
+                }
+              }
+
+              eventType = null;
+              eventData = null;
+            } else if (line === '') {
+              // Empty line
+            } else {
+              buffer = lines.slice(i).join('\n');
+              break;
+            }
+          }
+
+          return processStream();
+        });
+      }
+
+      return processStream();
+    }).catch(error => {
+      isSyncing = false;
+      showError(error.message);
+    });
   }
 
   /**

@@ -240,7 +240,7 @@ const syncDatabase = async () => {
 
     // Verify our specific tables
     const tableNames = tables.map(t => t.table_name);
-    const requiredTables = ['Users', 'DayPasses', 'DayCodes'];
+    const requiredTables = ['users', 'daypasses', 'daycodes'];
     for (const table of requiredTables) {
       if (tableNames.includes(table)) {
         console.log(`✓ Table ${table} exists`);

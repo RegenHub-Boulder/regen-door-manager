@@ -4,7 +4,7 @@ const bodyParser = require('body-parser');
 const basicAuth = require('basic-auth');
 const { Sequelize, User, DayPass, DayCode, syncDatabase } = require('./models');
 const { setUserCode, clearUserCode } = require('./helpers/homeAssistant');
-const { blockDuringSync, getSyncStatus, runSync } = require('./helpers/lockSync');
+const { blockDuringSync, getSyncStatus, runSync, retryFailed, syncState } = require('./helpers/lockSync');
 const { startBot } = require('./telegram/bot');
 const { startScheduler, expireOldCodes } = require('./scheduler');
 const { Op } = require('sequelize');
@@ -616,6 +616,62 @@ app.post('/api/sync/:operation', async (req, res) => {
   } catch (error) {
     // Send error event
     res.write(`event: error\ndata: ${JSON.stringify({ error: error.message })}\n\n`);
+  }
+
+  res.end();
+});
+
+// Retry failed items (SSE endpoint)
+app.post('/api/sync/retry', async (req, res) => {
+  // Check if sync is already running
+  const status = getSyncStatus();
+  if (status.isRunning) {
+    return res.status(423).json({
+      error: 'Sync already in progress',
+      operation: status.operation
+    });
+  }
+
+  // Check if there are failed items to retry
+  if (!syncState.lastFailedItems || syncState.lastFailedItems.length === 0) {
+    return res.status(400).json({ error: 'No failed items to retry' });
+  }
+
+  // Set up SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  // Send start event
+  res.write(`event: start\ndata: ${JSON.stringify({ operation: 'retry', count: syncState.lastFailedItems.length })}\n\n`);
+
+  // Acquire mutex
+  syncState.isRunning = true;
+  syncState.operation = 'retry';
+  syncState.startedAt = new Date();
+
+  // Progress callback
+  const onProgress = (progress) => {
+    syncState.current = progress.current;
+    syncState.total = progress.total;
+    syncState.message = progress.message;
+    res.write(`event: progress\ndata: ${JSON.stringify(progress)}\n\n`);
+  };
+
+  try {
+    const results = await retryFailed(onProgress);
+    res.write(`event: complete\ndata: ${JSON.stringify(results)}\n\n`);
+  } catch (error) {
+    res.write(`event: error\ndata: ${JSON.stringify({ error: error.message })}\n\n`);
+  } finally {
+    // Release mutex
+    syncState.isRunning = false;
+    syncState.operation = null;
+    syncState.startedAt = null;
+    syncState.current = 0;
+    syncState.total = 0;
+    syncState.message = '';
   }
 
   res.end();
