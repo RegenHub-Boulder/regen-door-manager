@@ -16,7 +16,7 @@ const syncState = {
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Rate limit delay between operations (ms)
-const RATE_LIMIT_DELAY = 500;
+const RATE_LIMIT_DELAY = 1000;
 
 // Retry configuration
 const MAX_RETRIES = 3;
