@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const basicAuth = require('basic-auth');
 const { Sequelize, User, DayPass, DayCode, syncDatabase } = require('./models');
 const { setUserCode, clearUserCode } = require('./helpers/homeAssistant');
+const { blockDuringSync, getSyncStatus, runSync } = require('./helpers/lockSync');
 const { startBot } = require('./telegram/bot');
 const { startScheduler, expireOldCodes } = require('./scheduler');
 const { Op } = require('sequelize');
@@ -106,7 +107,7 @@ app.get('/add', async (req, res) => {
   });
 
 // Handle new user submission
-app.post('/add', async (req, res) => {
+app.post('/add', blockDuringSync, async (req, res) => {
     const { name, pin_code, pin_code_slot, nfc_key_address, email, ethereum_address, telegram_username, member_type, initial_passes } = req.body;
 
     try {
@@ -161,7 +162,7 @@ app.post('/add', async (req, res) => {
   });
   
 
-app.post('/remove', async (req, res) => {
+app.post('/remove', blockDuringSync, async (req, res) => {
     const { id } = req.body; 
   
     try {
@@ -186,7 +187,7 @@ app.post('/remove', async (req, res) => {
     }
   });
 
-app.post('/remove-pin', async (req, res) => {
+app.post('/remove-pin', blockDuringSync, async (req, res) => {
     const { id } = req.body;  // Independent user ID
   
     try {
@@ -209,7 +210,7 @@ app.post('/remove-pin', async (req, res) => {
     }
   });
 
-app.post('/send-pin', async (req, res) => {
+app.post('/send-pin', blockDuringSync, async (req, res) => {
     const { slot } = req.body;
     console.log(`request body: ${JSON.stringify(req.body)}`);
     
@@ -255,7 +256,7 @@ app.get('/edit', async (req, res) => {
   
 
 // Handle the edit user form submission
-app.post('/edit', async (req, res) => {
+app.post('/edit', blockDuringSync, async (req, res) => {
     const { id, name, pin_code_slot, pin_code, nfc_key_address, email, ethereum_address, telegram_username, member_type } = req.body;
 
     try {
@@ -363,7 +364,7 @@ app.post('/passes/add', async (req, res) => {
 });
 
 // Delete a day pass
-app.post('/passes/delete', async (req, res) => {
+app.post('/passes/delete', blockDuringSync, async (req, res) => {
   const { pass_id, user_id } = req.body;
 
   try {
@@ -392,7 +393,7 @@ app.post('/passes/delete', async (req, res) => {
 });
 
 // Revoke a day code
-app.post('/passes/revoke-code', async (req, res) => {
+app.post('/passes/revoke-code', blockDuringSync, async (req, res) => {
   const { code_id, user_id } = req.body;
 
   try {
@@ -562,5 +563,61 @@ app.delete('/api/day-codes/:id', async (req, res) => {
     console.error('Error revoking day code:', error);
     res.status(500).json({ error: 'Failed to revoke day code' });
   }
+});
+
+// ============================================
+// Lock Sync API Routes
+// ============================================
+
+// Get current sync status
+app.get('/api/sync/status', (req, res) => {
+  res.json(getSyncStatus());
+});
+
+// Start a sync operation (SSE endpoint)
+app.post('/api/sync/:operation', async (req, res) => {
+  const { operation } = req.params;
+
+  // Validate operation
+  const validOperations = ['push', 'clear', 'resync'];
+  if (!validOperations.includes(operation)) {
+    return res.status(400).json({ error: `Invalid operation: ${operation}` });
+  }
+
+  // Check if sync is already running
+  const status = getSyncStatus();
+  if (status.isRunning) {
+    return res.status(423).json({
+      error: 'Sync already in progress',
+      operation: status.operation
+    });
+  }
+
+  // Set up SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  // Send start event
+  res.write(`event: start\ndata: ${JSON.stringify({ operation })}\n\n`);
+
+  // Progress callback
+  const onProgress = (progress) => {
+    res.write(`event: progress\ndata: ${JSON.stringify(progress)}\n\n`);
+  };
+
+  // Run the sync operation
+  try {
+    const results = await runSync(operation, onProgress);
+
+    // Send complete event
+    res.write(`event: complete\ndata: ${JSON.stringify(results)}\n\n`);
+  } catch (error) {
+    // Send error event
+    res.write(`event: error\ndata: ${JSON.stringify({ error: error.message })}\n\n`);
+  }
+
+  res.end();
 });
 

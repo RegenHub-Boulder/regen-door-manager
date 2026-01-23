@@ -14,6 +14,17 @@
 
   <!-- Page content wrapped in a container with margins -->
   <div class="content-container">
+    <!-- Lock Synchronization Section -->
+    <div class="sync-controls">
+      <h2>Lock Synchronization</h2>
+      <p>Sync door lock codes with the database. Operations may take several minutes.</p>
+      <div class="sync-buttons">
+        <button class="btn btn-sync btn-sync-push" onclick="LockSync.startSync('push')">Push All Codes</button>
+        <button class="btn btn-sync btn-sync-clear" onclick="LockSync.startSync('clear')">Clear All Slots</button>
+        <button class="btn btn-sync btn-sync-resync" onclick="LockSync.startSync('resync')">Full Resync</button>
+      </div>
+    </div>
+
     <h1>User List</h1>
 
     <div class="table-container">
@@ -92,6 +103,7 @@
   </div>
 
   <script src="/scripts/common.js"></script>
+  <script src="/scripts/lockSync.js"></script>
   <script>
     function showSpinner() {
       document.getElementById('spinner').style.display = 'block';
