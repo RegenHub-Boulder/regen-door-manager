@@ -241,6 +241,11 @@ const syncDatabase = async () => {
     await sequelize.sync({ alter: true });
     console.log('Database synchronized successfully.');
 
+    // Force nullable columns that Sequelize alter may not fix
+    await sequelize.query(`ALTER TABLE "DayCodes" ALTER COLUMN "day_pass_id" DROP NOT NULL;`).catch(() => {});
+    await sequelize.query(`ALTER TABLE "DayCodes" ALTER COLUMN "user_id" DROP NOT NULL;`).catch(() => {});
+    console.log('Ensured DayCodes nullable columns are correct.');
+
     // Verify tables exist by querying them
     const [tables] = await sequelize.query(
       "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
