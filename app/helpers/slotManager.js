@@ -128,12 +128,158 @@ function getTimezoneOffset(timezone, date) {
   return (utcDate - tzDate) / 60000;
 }
 
+/**
+ * Calculate expiration time for a given preset or custom time
+ * @param {string} preset - '6pm', '9pm', '3am', or a custom time string like '8:30pm'
+ * @returns {Date} The expiration date/time in UTC
+ */
+function calculateExpiration(preset) {
+  const timezone = process.env.TIMEZONE || 'America/Denver';
+  const now = new Date();
+
+  // Parse the target hour from preset
+  let targetHour;
+  let targetMinute = 0;
+
+  switch (preset) {
+    case '6pm':
+      targetHour = 18;
+      break;
+    case '9pm':
+      targetHour = 21;
+      break;
+    case '3am':
+      targetHour = 3;
+      break;
+    default:
+      // Try to parse custom time like "8:30pm", "2pm", "14:00", "tomorrow 3pm"
+      const parsed = parseCustomTime(preset, timezone);
+      if (parsed) return parsed;
+      // Fall back to 3 AM if unparseable
+      targetHour = 3;
+      break;
+  }
+
+  // Get current time in the target timezone
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+
+  const parts = formatter.formatToParts(now);
+  const getPart = (type) => parts.find(p => p.type === type)?.value;
+  const currentHour = parseInt(getPart('hour'));
+  const currentMinute = parseInt(getPart('minute'));
+
+  const expiration = new Date(now);
+
+  // For 3am preset, always use next day (unless it's before 3am)
+  if (targetHour === 3) {
+    if (currentHour < 3) {
+      expiration.setHours(3, 0, 0, 0);
+    } else {
+      expiration.setDate(expiration.getDate() + 1);
+      expiration.setHours(3, 0, 0, 0);
+    }
+  } else {
+    // For other presets: if current time is past target, use tomorrow
+    if (currentHour > targetHour || (currentHour === targetHour && currentMinute >= targetMinute)) {
+      expiration.setDate(expiration.getDate() + 1);
+    }
+    expiration.setHours(targetHour, targetMinute, 0, 0);
+  }
+
+  // Convert to UTC for storage
+  const tzOffset = getTimezoneOffset(timezone, expiration);
+  expiration.setTime(expiration.getTime() + tzOffset * 60 * 1000);
+
+  return expiration;
+}
+
+/**
+ * Parse a custom time string like "8:30pm", "2pm", "14:00", "tomorrow 3pm"
+ * @param {string} timeStr - The time string to parse
+ * @param {string} timezone - IANA timezone name
+ * @returns {Date|null} Parsed date or null if unparseable
+ */
+function parseCustomTime(timeStr, timezone) {
+  if (!timeStr) return null;
+
+  const str = timeStr.toLowerCase().trim();
+  let addDay = false;
+
+  let timePart = str;
+  if (str.startsWith('tomorrow')) {
+    addDay = true;
+    timePart = str.replace('tomorrow', '').trim();
+  }
+
+  // Match patterns: "8pm", "8:30pm", "8:30 pm", "14:00", "14"
+  const match12 = timePart.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
+  const match24 = timePart.match(/^(\d{1,2})(?::(\d{2}))?$/);
+
+  let hour, minute = 0;
+
+  if (match12) {
+    hour = parseInt(match12[1]);
+    minute = match12[2] ? parseInt(match12[2]) : 0;
+    const period = match12[3];
+    if (period === 'pm' && hour !== 12) hour += 12;
+    if (period === 'am' && hour === 12) hour = 0;
+  } else if (match24) {
+    hour = parseInt(match24[1]);
+    minute = match24[2] ? parseInt(match24[2]) : 0;
+  } else {
+    return null;
+  }
+
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+
+  const parts = formatter.formatToParts(now);
+  const getPart = (type) => parts.find(p => p.type === type)?.value;
+  const currentHour = parseInt(getPart('hour'));
+  const currentMinute = parseInt(getPart('minute'));
+
+  const expiration = new Date(now);
+
+  if (addDay) {
+    expiration.setDate(expiration.getDate() + 1);
+  } else if (currentHour > hour || (currentHour === hour && currentMinute >= minute)) {
+    // Time has passed today, use tomorrow
+    expiration.setDate(expiration.getDate() + 1);
+  }
+
+  expiration.setHours(hour, minute, 0, 0);
+
+  const tzOffset = getTimezoneOffset(timezone, expiration);
+  expiration.setTime(expiration.getTime() + tzOffset * 60 * 1000);
+
+  return expiration;
+}
+
 module.exports = {
   findNextAvailableDayPassSlot,
   isSlotAvailable,
   getAvailableSlotCount,
   generateRandomCode,
   calculateDayPassExpiration,
+  calculateExpiration,
   MIN_SLOT,
   MAX_SLOT
 };

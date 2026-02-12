@@ -43,7 +43,12 @@
         <tbody>
           <% users.forEach(function(user) { %>
             <tr>
-              <td><%= user.name %></td>
+              <td>
+                <%= user.name %>
+                <% if (user.is_admin) { %>
+                  <span class="badge badge-admin">Admin</span>
+                <% } %>
+              </td>
               <td>
                 <span class="badge <%= user.member_type === 'full' ? 'badge-full' : 'badge-daypass' %>">
                   <%= user.member_type === 'full' ? 'Full' : 'Day Pass' %>
@@ -157,6 +162,10 @@
     }
     .badge-daypass {
       background-color: #2196F3;
+      color: white;
+    }
+    .badge-admin {
+      background-color: #FF9800;
       color: white;
     }
     .btn-small {

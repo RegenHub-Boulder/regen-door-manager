@@ -48,6 +48,14 @@
           <input type="text" id="ethereum_address" name="ethereum_address" value="<%= user.ethereum_address || '' %>" placeholder="0x...">
         </div>
 
+        <div class="form-group">
+          <label for="is_admin" style="display: inline;">
+            <input type="checkbox" id="is_admin" name="is_admin" value="true" <%= user.is_admin ? 'checked' : '' %> style="width: auto; margin-right: 8px;">
+            Admin
+          </label>
+          <small>Can manage members and codes via Telegram</small>
+        </div>
+
         <div id="full-member-fields" style="<%= user.member_type === 'daypass' ? 'display:none' : '' %>">
           <div class="form-group">
             <label for="pin_code_slot">Pin Code Slot:</label>
