@@ -96,6 +96,11 @@ const User = sequelize.define('User', {
     type: DataTypes.ENUM('full', 'daypass'),
     defaultValue: 'full',
     allowNull: false
+  },
+  is_admin: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false
   }
 }, {
   timestamps: true
@@ -156,11 +161,15 @@ const DayCode = sequelize.define('DayCode', {
   },
   day_pass_id: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: true
   },
   user_id: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: true
+  },
+  label: {
+    type: DataTypes.STRING,
+    allowNull: true
   },
   code: {
     type: DataTypes.STRING,

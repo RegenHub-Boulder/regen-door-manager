@@ -68,7 +68,7 @@ app.get('/admin', async (req, res) => {
     try {
       // Try to include dayPasses
       users = await User.findAll({
-        attributes: ['id', 'name', 'email', 'ethereum_address', 'pin_code_slot', 'pin_code', 'nfc_key_address', 'telegram_username', 'member_type'],
+        attributes: ['id', 'name', 'email', 'ethereum_address', 'pin_code_slot', 'pin_code', 'nfc_key_address', 'telegram_username', 'member_type', 'is_admin'],
         include: [{
           model: DayPass,
           as: 'dayPasses',
@@ -79,7 +79,7 @@ app.get('/admin', async (req, res) => {
       // If DayPasses table doesn't exist, just get users without it
       console.log('[Admin] DayPasses table may not exist, loading users without passes');
       users = await User.findAll({
-        attributes: ['id', 'name', 'email', 'ethereum_address', 'pin_code_slot', 'pin_code', 'nfc_key_address', 'telegram_username', 'member_type']
+        attributes: ['id', 'name', 'email', 'ethereum_address', 'pin_code_slot', 'pin_code', 'nfc_key_address', 'telegram_username', 'member_type', 'is_admin']
       });
       // Add empty dayPasses array to each user for template compatibility
       users = users.map(u => ({ ...u.toJSON(), dayPasses: [] }));
@@ -108,7 +108,7 @@ app.get('/add', async (req, res) => {
 
 // Handle new user submission
 app.post('/add', blockDuringSync, async (req, res) => {
-    const { name, pin_code, pin_code_slot, nfc_key_address, email, ethereum_address, telegram_username, member_type, initial_passes } = req.body;
+    const { name, pin_code, pin_code_slot, nfc_key_address, email, ethereum_address, telegram_username, member_type, initial_passes, is_admin } = req.body;
 
     try {
       const isFull = member_type === 'full';
@@ -132,6 +132,7 @@ app.post('/add', blockDuringSync, async (req, res) => {
       const user = await User.create({
         name,
         member_type: member_type || 'full',
+        is_admin: is_admin === 'true',
         telegram_username: telegram_username && telegram_username.trim() !== "" ? telegram_username : null,
         pin_code: isFull ? (pin_code || null) : null,
         pin_code_slot: isFull ? pin_code_slot : null,
@@ -257,7 +258,7 @@ app.get('/edit', async (req, res) => {
 
 // Handle the edit user form submission
 app.post('/edit', blockDuringSync, async (req, res) => {
-    const { id, name, pin_code_slot, pin_code, nfc_key_address, email, ethereum_address, telegram_username, member_type } = req.body;
+    const { id, name, pin_code_slot, pin_code, nfc_key_address, email, ethereum_address, telegram_username, member_type, is_admin } = req.body;
 
     try {
       const user = await User.findByPk(id);
@@ -289,6 +290,7 @@ app.post('/edit', blockDuringSync, async (req, res) => {
       // Update user fields
       user.name = name;
       user.member_type = member_type;
+      user.is_admin = is_admin === 'true';
       user.telegram_username = telegram_username && telegram_username.trim() !== "" ? telegram_username : null;
       user.email = email || null;
       user.ethereum_address = ethereum_address || null;
