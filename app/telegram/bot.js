@@ -148,6 +148,7 @@ async function handleStart(msg) {
     message += `Available commands:\n`;
     message += `/mycode - View your current door code\n`;
     message += `/newcode - Set a new door code\n`;
+    message += `/daypass - Generate a day pass code for a guest\n`;
     message += `/help - Show help`;
   } else {
     message += `You are a Day Pass Member.\n\n`;
@@ -191,12 +192,14 @@ async function handleHelp(msg) {
   if (isFullMember) {
     message += `As a Full Member, you have:\n`;
     message += `- A permanent door code that works anytime\n`;
-    message += `- The ability to change your code whenever you want\n\n`;
+    message += `- The ability to change your code whenever you want\n`;
+    message += `- The ability to generate day pass codes for guests\n\n`;
     message += `Commands:\n`;
     message += `/mycode - View your current door code\n`;
     message += `/newcode - Set a new door code interactively\n`;
     message += `/newcode 1234 - Set code directly (4-6 digits)\n`;
     message += `/newcode random - Generate a random code\n`;
+    message += `/daypass - Generate a day pass code for a guest\n`;
   } else {
     message += `As a Day Pass Member, you have:\n`;
     message += `- A set number of day passes\n`;
@@ -336,7 +339,7 @@ async function handleNewCode(msg, match) {
 }
 
 /**
- * /daypass - Day pass members request a code
+ * /daypass - Request a day pass code (day pass members use a pass, full members generate a guest code)
  */
 async function handleDayPass(msg) {
   const chatId = msg.chat.id;
@@ -350,53 +353,96 @@ async function handleDayPass(msg) {
     return bot.sendMessage(chatId, `You're not registered. Please contact an admin.`);
   }
 
-  if (user.member_type !== 'daypass') {
-    return bot.sendMessage(chatId,
-      `This command is for Day Pass Members.\n` +
-      `As a Full Member, use /mycode to see your permanent code.`
-    );
-  }
+  const isFullMember = user.member_type === 'full';
 
-  // Check if user already has an active code
-  const existingCode = await DayCode.findOne({
-    where: {
-      user_id: user.id,
-      is_active: true,
-      expires_at: { [Op.gt]: new Date() }
+  // For day pass members, check for existing active code
+  if (!isFullMember) {
+    const existingCode = await DayCode.findOne({
+      where: {
+        user_id: user.id,
+        is_active: true,
+        expires_at: { [Op.gt]: new Date() }
+      }
+    });
+
+    if (existingCode) {
+      return bot.sendMessage(chatId,
+        `You already have an active code for today!\n\n` +
+        `🔑 *${existingCode.code}*\n\n` +
+        `Valid until: ${formatExpiration(existingCode.expires_at)}\n\n` +
+        `Enter this code on the door keypad to unlock.`,
+        { parse_mode: 'Markdown' }
+      );
     }
-  });
 
-  if (existingCode) {
-    return bot.sendMessage(chatId,
-      `You already have an active code for today!\n\n` +
-      `🔑 *${existingCode.code}*\n\n` +
-      `Valid until: ${formatExpiration(existingCode.expires_at)}\n\n` +
-      `Enter this code on the door keypad to unlock.`,
-      { parse_mode: 'Markdown' }
-    );
+    // Find a valid day pass
+    const dayPass = await DayPass.findOne({
+      where: {
+        user_id: user.id,
+        [Op.or]: [
+          { expires_at: null },
+          { expires_at: { [Op.gt]: new Date() } }
+        ]
+      },
+      order: [['expires_at', 'ASC']]
+    });
+
+    if (!dayPass || !dayPass.hasRemainingUses()) {
+      return bot.sendMessage(chatId,
+        `You don't have any day passes remaining.\n\n` +
+        `Please contact an admin to purchase more passes.`
+      );
+    }
+
+    // Day pass member flow: consume a pass and generate code
+    const slot = await findNextAvailableDayPassSlot();
+    if (!slot) {
+      return bot.sendMessage(chatId,
+        `Sorry, all door code slots are currently in use.\n` +
+        `Please try again later or contact an admin.`
+      );
+    }
+
+    const code = generateRandomCode();
+    const expiresAt = calculateDayPassExpiration();
+
+    try {
+      await setUserCode(slot, code);
+
+      await DayCode.create({
+        day_pass_id: dayPass.id,
+        user_id: user.id,
+        code: code,
+        pin_slot: slot,
+        issued_at: new Date(),
+        expires_at: expiresAt,
+        is_active: true
+      });
+
+      dayPass.used_count += 1;
+      await dayPass.save();
+
+      const remainingUses = dayPass.allowed_uses - dayPass.used_count;
+
+      return bot.sendMessage(chatId,
+        `Here's your door code for today!\n\n` +
+        `🔑 *${code}*\n\n` +
+        `Valid until: ${formatExpiration(expiresAt)}\n\n` +
+        `Day passes remaining: ${remainingUses}\n\n` +
+        `Enter this code on the door keypad to unlock.`,
+        { parse_mode: 'Markdown' }
+      );
+    } catch (error) {
+      console.error('[Telegram] Failed to create day code:', error);
+      return bot.sendMessage(chatId,
+        `Sorry, there was an error generating your code.\n` +
+        `Please try again or contact an admin.`
+      );
+    }
   }
 
-  // Find a valid day pass
-  const dayPass = await DayPass.findOne({
-    where: {
-      user_id: user.id,
-      [Op.or]: [
-        { expires_at: null },
-        { expires_at: { [Op.gt]: new Date() } }
-      ]
-    },
-    order: [['expires_at', 'ASC']]
-  });
-
-  if (!dayPass || !dayPass.hasRemainingUses()) {
-    return bot.sendMessage(chatId,
-      `You don't have any day passes remaining.\n\n` +
-      `Please contact an admin to purchase more passes.`
-    );
-  }
-
+  // Full member flow: generate a guest code (expires at 3 AM, no day pass consumed)
   const slot = await findNextAvailableDayPassSlot();
-
   if (!slot) {
     return bot.sendMessage(chatId,
       `Sorry, all door code slots are currently in use.\n` +
@@ -411,8 +457,9 @@ async function handleDayPass(msg) {
     await setUserCode(slot, code);
 
     await DayCode.create({
-      day_pass_id: dayPass.id,
+      day_pass_id: null,
       user_id: user.id,
+      label: `Guest code by ${user.name}`,
       code: code,
       pin_slot: slot,
       issued_at: new Date(),
@@ -420,23 +467,17 @@ async function handleDayPass(msg) {
       is_active: true
     });
 
-    dayPass.used_count += 1;
-    await dayPass.save();
-
-    const remainingUses = dayPass.allowed_uses - dayPass.used_count;
-
     return bot.sendMessage(chatId,
-      `Here's your door code for today!\n\n` +
+      `Here's a guest door code!\n\n` +
       `🔑 *${code}*\n\n` +
       `Valid until: ${formatExpiration(expiresAt)}\n\n` +
-      `Day passes remaining: ${remainingUses}\n\n` +
-      `Enter this code on the door keypad to unlock.`,
+      `Share this code with your guest.`,
       { parse_mode: 'Markdown' }
     );
   } catch (error) {
-    console.error('[Telegram] Failed to create day code:', error);
+    console.error('[Telegram] Failed to create guest code:', error);
     return bot.sendMessage(chatId,
-      `Sorry, there was an error generating your code.\n` +
+      `Sorry, there was an error generating the code.\n` +
       `Please try again or contact an admin.`
     );
   }
