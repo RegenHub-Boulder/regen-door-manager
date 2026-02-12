@@ -1,8 +1,8 @@
 const { DayCode } = require('../models');
 const { Op } = require('sequelize');
 
-const MIN_SLOT = parseInt(process.env.DAY_PASS_SLOT_MIN) || 125;
-const MAX_SLOT = parseInt(process.env.DAY_PASS_SLOT_MAX) || 249;
+const MIN_SLOT = parseInt(process.env.DAY_PASS_SLOT_MIN) || 75;
+const MAX_SLOT = parseInt(process.env.DAY_PASS_SLOT_MAX) || 99;
 
 /**
  * Find the next available slot for a day pass code.
