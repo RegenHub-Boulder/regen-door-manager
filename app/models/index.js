@@ -221,11 +221,11 @@ const DayCode = sequelize.define('DayCode', {
 User.hasMany(DayPass, { foreignKey: 'user_id', as: 'dayPasses' });
 DayPass.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
-DayPass.hasMany(DayCode, { foreignKey: 'day_pass_id', as: 'dayCodes' });
-DayCode.belongsTo(DayPass, { foreignKey: 'day_pass_id', as: 'dayPass' });
+DayPass.hasMany(DayCode, { foreignKey: { name: 'day_pass_id', allowNull: true }, as: 'dayCodes' });
+DayCode.belongsTo(DayPass, { foreignKey: { name: 'day_pass_id', allowNull: true }, as: 'dayPass' });
 
-User.hasMany(DayCode, { foreignKey: 'user_id', as: 'dayCodes' });
-DayCode.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(DayCode, { foreignKey: { name: 'user_id', allowNull: true }, as: 'dayCodes' });
+DayCode.belongsTo(User, { foreignKey: { name: 'user_id', allowNull: true }, as: 'user' });
 
 // Sync all models
 const syncDatabase = async () => {
