@@ -528,8 +528,9 @@ async function createQuickCode(chatId, expiresAt, label) {
     return bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
   } catch (error) {
     console.error('[Telegram] Failed to create quick code:', error);
+    const errMsg = error.errors ? error.errors.map(e => e.message).join(', ') : error.message;
     return bot.sendMessage(chatId,
-      `Sorry, there was an error creating the code.\nPlease try again.`
+      `Sorry, there was an error creating the code.\n${errMsg}\nPlease try again.`
     );
   }
 }
